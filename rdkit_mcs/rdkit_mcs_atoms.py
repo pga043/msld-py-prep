@@ -63,11 +63,12 @@ params.BondTyper = rdFMCS.BondCompare.CompareOrder
 params.BondCompareParameters.RingMatchesRingOnly = True
 params.BondCompareParameters.CompleteRingsOnly = True
 params.BondCompareParameters.MatchFusedRings = True
+params.Timeout = 360 # seconds
 #===============================================================================#
 
 if user_mcs != True:
 	start = time.time()
-	res = rdFMCS.FindMCS(mols, params, timeout=3600)
+	res = rdFMCS.FindMCS(mols, params)
 	elapsed_time = time.time() - start
 	print(f"Time taken for MCS search: {elapsed_time:.4f} seconds")
 	print('\n')
