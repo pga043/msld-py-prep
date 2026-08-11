@@ -8,10 +8,11 @@ from rdkit.Chem import rdFMCS
 #import joblib 
 import time
 import fnmatch
+import sys, os
 
 mol_list = open('mol_list.txt', 'r')
-use_cats = False
-use_hybrid = True
+use_cats = True
+use_hybrid = False
 user_mcs = False
 user_mcs_pattern = 'C([H])([H])C([H])([H])C([H])([H])C([H])([H])C([H])([H])C([H])([H])C([H])([H])C([H])([H])C(=O)[O-]'
 
@@ -26,21 +27,15 @@ Possible failures:
 1. Degenrate MCS
 2.  
 '''
-#-----------------------------------------------------------------------------#
-#-----------------------------------------------------------------------------#
-mols = []
-names = []
-for pdb in mol_list:
-	mols.append(Chem.MolFromPDBFile(f'{pdb.split()[0]}.pdb', removeHs=False))
-	names.append(f'{pdb.split()[0]}')
 
-nmols = len(mols)
-
+#-----------------------------------------------------------------------------#
+#-------------- common functions, mostly applied to pdb file -----------------#
+#-----------------------------------------------------------------------------#
 def atom_by_index(pdb, index):
     at = pdb.GetAtomWithIdx(index)
     name = at.GetPDBResidueInfo().GetName()
     return name
-    
+
 def get_atom_name(pdb):
     idx = 0
     atoms = []
@@ -53,6 +48,30 @@ def get_atom_name(pdb):
         atoms.append(ri.GetName())
     return atoms
 
+def check_unique_names(mol):
+    atom_names = []
+    for i in range(mol.GetNumAtoms()):
+        atom_names.append(atom_by_index(mol, i))
+    is_unique = len(atom_names) == len(set(atom_names))
+    return is_unique # true or false
+
+#===============================================================================#
+mols = []
+names = []
+for pdb in mol_list:
+	if os.path.exists(f'{pdb.split()[0]}.pdb'):
+		mol = Chem.MolFromPDBFile(f'{pdb.split()[0]}.pdb', removeHs=False)
+	else:
+		os.system(f"obabel -imol2 {pdb.split()[0]}.mol2 -opdb > {pdb.split()[0]}.pdb")
+		mol = Chem.MolFromPDBFile(f'{pdb.split()[0]}.pdb', removeHs=False)
+	mols.append(mol)
+	names.append(f'{pdb.split()[0]}')
+	if check_unique_names(mol) != True:
+		print('Atom names in the pdb file are not unique, exiting.')
+		quit()
+
+nmols = len(mols)
+
 #===============================================================================#
 #-------------------------- MCS Rules ------------------------------------------#
 #===============================================================================#
@@ -63,7 +82,7 @@ params.BondTyper = rdFMCS.BondCompare.CompareOrder
 params.BondCompareParameters.RingMatchesRingOnly = True
 params.BondCompareParameters.CompleteRingsOnly = True
 params.BondCompareParameters.MatchFusedRings = True
-params.Timeout = 360 # seconds
+#params.Timeout = 3600
 #===============================================================================#
 
 if user_mcs != True:
@@ -72,6 +91,10 @@ if user_mcs != True:
 	elapsed_time = time.time() - start
 	print(f"Time taken for MCS search: {elapsed_time:.4f} seconds")
 	print('\n')
+	if Chem.MolFromSmarts(res.smartsString).GetNumAtoms() < 3:
+		print('MCS search did not result in more than 3 atom. maybe increase the time for mcs search')
+		print('The code will quit now.')
+		quit()
 
 highlightAtoms = []
 atoms_list = []
@@ -107,9 +130,11 @@ for mol in mols:
 	# get site n substituents 
 	not_hit = [i for i in range(mol.GetNumAtoms()) if i not in hit]
 	site_atom = [atom_by_index(mol, atom) for atom in not_hit]
-
+	
 	# take the heavy atom out of common core if there are only hydrogens left in the substituents
-		
+	
+	# update not_hit:
+
 	
 	# get anchor atom
 	for atom in not_hit:
@@ -148,9 +173,9 @@ if use_cats == True:
 				if fnmatch.fnmatch(str(atoms_list[0][i]), '*Cl*') == False:
 			#print(f'   cats sele atom LIG1 1 {atoms_list[0][i]} .or. atom LIG2 1 {atoms_list[1][i]} .or. atom LIG3 1 {atoms_list[2][i]} .or. LIG4 1 {atoms_list[3][i]} .or. atom LIG5 1 {atoms_list[4][i]}')
 					for j in range(nmols):
-						parts.append(f'atom LIG{j+1} 1 {atoms_list[j][i]}')
+						parts.append(f'atom ML{j+1} {j+1} {atoms_list[j][i]}')
 		if parts:
-			print('   cats sele ' + ' .or. '.join(parts) + ' end')
+			print('   cats sele ' + ' .or. '.join(parts) + ' show end')
 
 
 print('\n')
